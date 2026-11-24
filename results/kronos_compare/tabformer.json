@@ -1,0 +1,154 @@
+{
+ "dataset": "tabformer",
+ "splits": {
+  "train": {
+   "rows": 499968,
+   "positives": 569
+  },
+  "validation": {
+   "rows": 99968,
+   "positives": 104
+  },
+  "test": {
+   "rows": 3658953,
+   "positives": 4454
+  }
+ },
+ "preparation": {
+  "split_boundaries": [
+   16779,
+   17558
+  ],
+  "summaries": {
+   "train": {
+    "rows": 499968,
+    "positives": 569,
+    "source_rows": 17068962,
+    "sampled": true,
+    "windows": 3906
+   },
+   "validation": {
+    "rows": 99968,
+    "positives": 104,
+    "source_rows": 3658985,
+    "sampled": true,
+    "windows": 781
+   },
+   "test": {
+    "rows": 3658953,
+    "positives": 4454,
+    "source_rows": 3658953,
+    "sampled": false,
+    "windows": 28586
+   }
+  },
+  "protocol": "70/15/15 chronological period boundaries; label-independent block-hash caps for train/validation; complete test",
+  "limits": "global stream, not account histories; stable source-row order breaks timestamp ties; categorical vocab fitted on label-independent training rows only",
+  "excluded_features": "labels, rule flags, account/card/customer/merchant IDs, post-transaction balances, error annotations, laundering pattern annotations"
+ },
+ "xgb": {
+  "raw__seed42": {
+   "features": 42,
+   "trees": 74,
+   "validation": {
+    "n": 99968,
+    "positives": 104,
+    "prevalence": 0.0010403329065300896,
+    "AP": 0.27774731318045115,
+    "ROC_AUC": 0.9625539291128242,
+    "precision": 0.8461538461538461,
+    "recall": 0.21153846153846154,
+    "F1": 0.3384615384615385,
+    "TP": 22,
+    "FP": 4,
+    "FN": 82,
+    "TN": 99860,
+    "threshold": 0.7323557734489441
+   },
+   "test": {
+    "n": 3658953,
+    "positives": 4454,
+    "prevalence": 0.001217288114933425,
+    "AP": 0.005691842909627306,
+    "ROC_AUC": 0.6596646433373672,
+    "precision": 0.06725146198830409,
+    "recall": 0.005163897620116749,
+    "F1": 0.009591326105087575,
+    "TP": 23,
+    "FP": 319,
+    "FN": 4431,
+    "TN": 3654180,
+    "threshold": 0.7323557734489441
+   }
+  },
+  "raw__seed13": {
+   "features": 42,
+   "trees": 103,
+   "validation": {
+    "n": 99968,
+    "positives": 104,
+    "prevalence": 0.0010403329065300896,
+    "AP": 0.2832359155832335,
+    "ROC_AUC": 0.9680889567504114,
+    "precision": 0.6857142857142857,
+    "recall": 0.23076923076923078,
+    "F1": 0.34532374100719426,
+    "TP": 24,
+    "FP": 11,
+    "FN": 80,
+    "TN": 99853,
+    "threshold": 0.7621589303016663
+   },
+   "test": {
+    "n": 3658953,
+    "positives": 4454,
+    "prevalence": 0.001217288114933425,
+    "AP": 0.004328009485389825,
+    "ROC_AUC": 0.6911707101777226,
+    "precision": 0.02857142857142857,
+    "recall": 0.005612932195779075,
+    "F1": 0.009382623381497467,
+    "TP": 25,
+    "FP": 850,
+    "FN": 4429,
+    "TN": 3653649,
+    "threshold": 0.7621589303016663
+   }
+  },
+  "raw__seed2026": {
+   "features": 42,
+   "trees": 84,
+   "validation": {
+    "n": 99968,
+    "positives": 104,
+    "prevalence": 0.0010403329065300896,
+    "AP": 0.265614531670407,
+    "ROC_AUC": 0.9670875948982924,
+    "precision": 0.84,
+    "recall": 0.20192307692307693,
+    "F1": 0.3255813953488372,
+    "TP": 21,
+    "FP": 4,
+    "FN": 83,
+    "TN": 99860,
+    "threshold": 0.7495328187942505
+   },
+   "test": {
+    "n": 3658953,
+    "positives": 4454,
+    "prevalence": 0.001217288114933425,
+    "AP": 0.005436266621955937,
+    "ROC_AUC": 0.6735061800032429,
+    "precision": 0.07530120481927711,
+    "recall": 0.005612932195779075,
+    "F1": 0.010447137484329294,
+    "TP": 25,
+    "FP": 307,
+    "FN": 4429,
+    "TN": 3654192,
+    "threshold": 0.7495328187942505
+   }
+  }
+ },
+ "hgb": {}
+}

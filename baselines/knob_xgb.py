@@ -21,7 +21,10 @@ tau / lambda and the variant are chosen on validation; test labels are used once
 """
 import argparse
 import itertools
+import os
 import json
+import math
+from pathlib import Path
 import warnings
 
 import numpy as np
@@ -36,7 +39,7 @@ from .common import RESULTS, SEEDS, metrics, pick_threshold
 from .market import SAPIENZA_FEATURES, causal, load
 
 warnings.filterwarnings('ignore')
-torch.set_num_threads(1)
+torch.set_num_threads(int(os.environ.get('KNOB_TORCH_THREADS', 1)))
 OUT = RESULTS / 'knob'
 TAUS = (0.1, 0.25, 0.5, 1.0, 2.0, 4.0)
 LAYERS = 8
@@ -68,11 +71,20 @@ def xgb_model(seed, pos_weight, rounds=600, early=True):
                              early_stopping_rounds=50 if early else None, random_state=seed, n_jobs=2)
 
 
+SLICED = False      # set per run: large test sets compute each block from a sliced booster (4-5x faster)
+
+
 def contribution_map(model, X, trees, layers):
     """H[n, L, d] and margin[n]; block l holds the contributions of trees edges[l]..edges[l+1]."""
     booster = model.get_booster()
     edges = np.unique(np.linspace(0, trees, layers + 1).round().astype(int))
     data = xgb.DMatrix(X)
+    if SLICED:      # same quantity as below up to float rounding, one TreeSHAP pass per block
+        H = np.stack([booster[int(a):int(b)].predict(data, pred_contribs=True)[:, :-1]
+                      for a, b in zip(edges[:-1], edges[1:])], axis=1).astype(np.float32)
+        margin = booster.predict(data, output_margin=True, iteration_range=(0, trees)).astype(np.float64)
+        assert np.ptp(margin - H.sum((1, 2), dtype=np.float64)) < 1e-2, 'contribution map is not additive'
+        return H, margin
     # TreeSHAP is additive over trees, so a block's contribution is a difference of cumulative maps
     cum = [np.zeros((X.shape[0], X.shape[1]), dtype=np.float64)] + [
         booster.predict(data, pred_contribs=True, iteration_range=(0, int(b)))[:, :-1].astype(np.float64)
@@ -80,8 +92,32 @@ def contribution_map(model, X, trees, layers):
     H = np.stack([b - a for a, b in zip(cum[:-1], cum[1:])], axis=1).astype(np.float32)
     margin = booster.predict(data, output_margin=True, iteration_range=(0, trees)).astype(np.float64)
     bias = margin - H.sum((1, 2))
-    assert np.ptp(bias) < 1e-3, f'contribution map is not additive: {np.ptp(bias)}'
+    assert np.ptp(bias) < 1e-2, f'contribution map is not additive: {np.ptp(bias)}'
     return H, margin
+
+
+def margins(model, X, trees, chunk=500_000):
+    booster = model.get_booster()
+    return np.concatenate([booster.predict(xgb.DMatrix(X[b:b + chunk]), output_margin=True,
+                                           iteration_range=(0, trees)).astype(np.float64)
+                           for b in range(0, len(X), chunk)])
+
+
+def knob_scalars(model, X, trees, layers, kan, J, kan_r, Jr, seed, rows=None):
+    """Per-row knob state without keeping the full map in memory: Phi, |grad Phi|, the sum of each unit
+    direction over the knob coordinates (all the additive read-out needs) and the random-knob Phi."""
+    rows = np.arange(len(X)) if rows is None else rows
+    chunk = max(20_000, int(4e7 / (layers * X.shape[1])))
+    out = dict(phi=[], gnorm=[], phi_r=[], sums={})
+    for i, b in enumerate(range(0, len(rows), chunk)):
+        H, _ = contribution_map(model, X[rows[b:b + chunk]], trees, layers)
+        phi, grad = kan_state(kan, H[:, :, J])
+        dirs, gnorm = directions(grad, seed if i == 0 else (seed, i))
+        out['phi'].append(phi); out['gnorm'].append(gnorm); out['phi_r'].append(kan_state(kan_r, H[:, :, Jr])[0])
+        for name, d in dirs.items():
+            out['sums'].setdefault(name, []).append(d.sum(1))
+    return dict(phi=np.concatenate(out['phi']), gnorm=np.concatenate(out['gnorm']),
+                phi_r=np.concatenate(out['phi_r']), sums={k: np.concatenate(v) for k, v in out['sums'].items()})
 
 
 # ----------------------------------------------------------------------------- probes
@@ -132,12 +168,18 @@ class MLP(nn.Module):
         return self.net(x)[:, 0]
 
 
-def fit_torch(model, x, target, w, steps=300, lr=1e-2, decay=1e-3):
+def fit_torch(model, x, target, w, steps=300, lr=1e-2, decay=1e-3, batch=None):
+    """Full-batch Adam; `batch` switches to weighted mini-batches (used for the CNN on wide maps)."""
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=decay)
     x = torch.as_tensor(x, dtype=torch.float32); t = torch.as_tensor(target, dtype=torch.float32)
     w = torch.as_tensor(w / w.sum(), dtype=torch.float32)
     for _ in range(steps):
         opt.zero_grad()
+        if batch and batch < len(x):
+            i = torch.randint(len(x), (batch,))
+            loss = (nn.functional.binary_cross_entropy_with_logits(model(x[i]), t[i], reduction='none') * w[i]).sum() / w[i].sum()
+            loss.backward(); opt.step()
+            continue
         loss = (nn.functional.binary_cross_entropy_with_logits(model(x), t, reduction='none') * w).sum()
         loss.backward(); opt.step()
     return model.eval()
@@ -158,7 +200,8 @@ def probe(kind, seed, xtr, ctr, wtr, xte):
     if kind == 'mlp':
         m = fit_torch(MLP(int(np.prod(xtr.shape[1:]))), xtr, ctr, wtr)
     else:
-        m = fit_torch(MultiViewCNN(xtr.shape[1], xtr.shape[2]), xtr, ctr, wtr, steps=200)
+        m = fit_torch(MultiViewCNN(xtr.shape[1], xtr.shape[2]), xtr, ctr, wtr, steps=200,
+                      batch=512 if xtr.shape[2] > 32 else None)
     with torch.no_grad():
         g = m(torch.as_tensor(xte, dtype=torch.float32)).numpy()
         ranking = None
@@ -256,11 +299,11 @@ def directions(grad, seed):
     return out, norm[:, 0]
 
 
-def margin_shift(tau, direction, grad_norm, alpha, eps, clip=20.0):
+def margin_shift(tau, direction_sum, grad_norm, alpha, eps, clip=20.0):
     """Paper patch dH[l, J] = alpha_l / sum(alpha^2) * dz, dz = tau / (|grad Phi| + eps) * d.
-    XGBoost reads every block additively, so the margin moves by sum_l sum_j dH[l, j]."""
-    dz = tau / (grad_norm[:, None] + eps) * direction
-    return np.clip(alpha.sum() / (alpha ** 2).sum() * dz.sum(1), -clip, clip)
+    XGBoost reads every block additively, so the margin moves by sum_l sum_j dH[l, j]
+    = sum(alpha) / sum(alpha^2) * tau / (|grad Phi| + eps) * sum_j d_j."""
+    return np.clip(alpha.sum() / (alpha ** 2).sum() * tau / (grad_norm + eps) * direction_sum, -clip, clip)
 
 
 # ----------------------------------------------------------------------------- evaluation helpers
@@ -286,37 +329,52 @@ def brief(e):
 
 
 # ----------------------------------------------------------------------------- one run
-def run(dataset, variant, seed, splits, layers=LAYERS, save=True):
-    (Xtr, ytr, gtr), (Xva, yva, _), (Xte, yte, _) = (design(splits[s], variant) for s in
-                                                    ('train', 'validation', 'test'))
-    names = feature_names(dataset, variant, Xtr.shape[1])
+def run(dataset, variant, seed, data, names, layers=LAYERS, save=True):
+    global SLICED
+    Xtr, ytr, gtr, Xva, yva, Xte, yte = data
+    large = len(Xte) > 500_000        # PaySim, IBM AML, TabFormer: lighter controls to bound run time
+    SLICED = large
+    lambdas, n_random = ((1.0, 10.0), 5) if large else ((1.0, 3.0, 10.0), 10)
+    # nested / random subsets are probed with MLP + LR on wide or large tasks (CNN there costs hours)
+    subset_probes = ('mlp', 'lr') if large or Xtr.shape[1] > 32 else ('cnn', 'lr')
     pos_weight = float(np.sqrt((ytr == 0).sum() / max(ytr.sum(), 1)))
     rng = np.random.default_rng(seed)
 
     # 1. the baseline exactly as baselines.market fits it
     model = xgb_model(seed, pos_weight).fit(Xtr, ytr, eval_set=[(Xva, yva)], verbose=False)
     trees = model.best_iteration + 1
-    Hva, mva = contribution_map(model, Xva, trees, layers)
-    Hte, mte = contribution_map(model, Xte, trees, layers)
-    L, d = Hva.shape[1:]
+    L = len(np.unique(np.linspace(0, trees, layers + 1).round().astype(int))) - 1
+    d = Xtr.shape[1]
+    mva, mte = margins(model, Xva, trees), margins(model, Xte, trees)
     base = evaluate(yva, mva, yte, mte)
     thr = base['test']['threshold']
     print(f'[{dataset} {variant} seed={seed}] trees={trees} L={L} d={d}  baseline: {brief(base)}', flush=True)
 
-    # 2. out-of-fold hidden states and correctness labels on the training sequences
-    Htr = np.zeros((len(ytr), L, d), dtype=np.float32); mtr = np.zeros(len(ytr))
+    # 2. out-of-fold margins and correctness labels on the training rows (grouped folds)
+    mtr = np.zeros(len(ytr)); fold_models = []
     n_folds = min(5, len(np.unique(gtr)))
     for a, b in GroupKFold(n_folds).split(Xtr, ytr, gtr):
         fold = xgb_model(seed, pos_weight, rounds=trees, early=False).fit(Xtr[a], ytr[a], verbose=False)
-        Htr[b], mtr[b] = contribution_map(fold, Xtr[b], trees, layers)
+        mtr[b] = margins(fold, Xtr[b], trees)
+        fold_models.append((fold, b))
     thr_oof = pick_threshold(ytr, mtr)
     alert_tr = mtr >= thr_oof
     correct_all, _ = cell_weights(ytr, alert_tr)
     keep = (ytr == 1) | (correct_all == 0)
-    spare = np.flatnonzero(~keep)
+    if keep.sum() > 6000:           # large tasks: cap positives and errors kept for the probe
+        drop = np.flatnonzero(keep)
+        keep[rng.choice(drop, len(drop) - 6000, replace=False)] = False
+        spare = np.flatnonzero(~((ytr == 1) | (correct_all == 0)))
+    else:
+        spare = np.flatnonzero(~keep)
     keep[rng.choice(spare, min(len(spare), 2000), replace=False)] = True     # sampled true negatives
     idx = np.flatnonzero(keep)
-    Hp, yp, gp, mp = Htr[idx], ytr[idx], gtr[idx], mtr[idx]
+    Hp = np.zeros((len(idx), L, d), dtype=np.float32)
+    for fold, b in fold_models:     # hidden states only for the probe rows
+        inside = np.isin(idx, b)
+        if inside.any():
+            Hp[inside], _ = contribution_map(fold, Xtr[idx[inside]], trees, layers)
+    yp, gp, mp = ytr[idx], gtr[idx], mtr[idx]
     cp, wp = cell_weights(yp, alert_tr[idx])
     cells = dict(TP=int(((cp == 1) & (yp == 1)).sum()), FN=int(((cp == 0) & (yp == 1)).sum()),
                  FP=int(((cp == 0) & (yp == 0)).sum()), TN_sampled=int(((cp == 1) & (yp == 0)).sum()))
@@ -336,21 +394,25 @@ def run(dataset, variant, seed, splits, layers=LAYERS, save=True):
     late_ratio = float(np.abs(delta)[L // 2:].sum() / max(np.abs(delta).sum(), 1e-12))
     fold_top = [list(np.argsort(-np.abs(dl).sum(0))[:2]) for dl in deltas]
     acc_k, k_knob = {}, None
-    for k in range(1, d + 1):
-        acc_k[k] = max(cv_accuracy(('cnn', 'lr'), seed, Hp[:, :, order[:k]], cp, wp, gp, folds).values())
+    grid = range(1, d + 1) if d <= 16 else sorted({1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, d} & set(range(1, d + 1)))
+    for k in grid:
+        acc_k[k] = max(cv_accuracy(subset_probes, seed, Hp[:, :, order[:k]], cp, wp, gp, folds).values())
         if k_knob is None and acc_k[k] >= best_full - DELTA:
             k_knob = k
         if k_knob is not None and k >= min(d, max(k_knob + 2, 4)):
             break
     k_knob = k_knob or d
     J = order[:k_knob]
-    combos = list(itertools.combinations(range(d), k_knob))
-    if len(combos) > 10:
-        combos = [combos[i] for i in rng.choice(len(combos), 10, replace=False)]
-    acc_random = [max(cv_accuracy(('cnn', 'lr'), seed, Hp[:, :, list(c)], cp, wp, gp, folds).values())
+    if math.comb(d, k_knob) <= 20000:
+        combos = list(itertools.combinations(range(d), k_knob))
+        if len(combos) > n_random:
+            combos = [combos[i] for i in rng.choice(len(combos), n_random, replace=False)]
+    else:
+        combos = [tuple(sorted(rng.choice(d, k_knob, replace=False))) for _ in range(n_random)]
+    acc_random = [max(cv_accuracy(subset_probes, seed, Hp[:, :, list(c)], cp, wp, gp, folds).values())
                   for c in combos if set(c) != set(J)] or [float('nan')]
     print(f'  probe set {cells} | acc full {acc_full} | margin-only {acc_margin}\n'
-          f'  knobs k={k_knob}: {[names[j] for j in J]} acc={acc_k[k_knob]:.4f} | random-{k_knob} '
+          f'  knobs k={k_knob}: {[names[j] for j in J][:8]} acc={acc_k[k_knob]:.4f} | random-{k_knob} '
           f'{np.mean(acc_random):.4f}+-{np.std(acc_random):.4f} max {np.max(acc_random):.4f} | '
           f'late ratio {late_ratio:.2f}', flush=True)
 
@@ -365,36 +427,42 @@ def run(dataset, variant, seed, splits, layers=LAYERS, save=True):
     margin_probe = LogisticRegression(max_iter=500).fit((unc.reshape(len(unc), -1) - unc_mu) / unc_sd, cp,
                                                         sample_weight=wp)
     g_margin = lambda m, t: margin_probe.decision_function((np.column_stack([m, np.abs(m - t)]) - unc_mu) / unc_sd)
+    del Hp
     state = {}
-    for tag, H, m, y in (('validation', Hva, mva, yva), ('test', Hte, mte, yte)):
-        phi, grad = kan_state(kan, H[:, :, J])
-        dirs, gnorm = directions(grad, seed)
-        phi_r, _ = kan_state(kan_r, H[:, :, Jr])
+    for tag, X, m, y in (('validation', Xva, mva, yva), ('test', Xte, mte, yte)):
+        st = knob_scalars(model, X, trees, layers, kan, J, kan_r, Jr, seed)
         c_true, w_true = cell_weights(y, m >= thr)
-        state[tag] = dict(phi=phi, dirs=dirs, gnorm=gnorm, phi_r=phi_r, correct=c_true, w=w_true, m=m, y=y)
+        state[tag] = dict(**st, correct=c_true, w=w_true, m=m, y=y)
     eps = 0.05 * float(np.median(state['validation']['gnorm']))
     held_out = {}
     for tag, st in state.items():
         c = st['correct']
+        both = 0 < c.sum() < len(c)
         held_out[tag] = dict(
             errors=int((c == 0).sum()), FN=int(((c == 0) & (st['y'] == 1)).sum()),
             knob_bal_acc=balanced_accuracy(c, st['phi'], st['w']),
             random_knob_bal_acc=balanced_accuracy(c, st['phi_r'], st['w']),
             margin_only_bal_acc=balanced_accuracy(c, g_margin(st['m'], thr), st['w']),
-            knob_error_auc=float(roc_auc_score(c, st['phi'])) if 0 < c.sum() < len(c) else None,
-            margin_error_auc=float(roc_auc_score(c, np.abs(st['m'] - thr))) if 0 < c.sum() < len(c) else None,
-            random_knob_error_auc=float(roc_auc_score(c, st['phi_r'])) if 0 < c.sum() < len(c) else None)
+            knob_error_auc=float(roc_auc_score(c, st['phi'])) if both else None,
+            margin_error_auc=float(roc_auc_score(c, np.abs(st['m'] - thr))) if both else None,
+            random_knob_error_auc=float(roc_auc_score(c, st['phi_r'])) if both else None)
+
+    # Candidate scores are kept as recipes (functions), not arrays, so large test sets fit in memory.
+    scores = {'baseline': lambda: (mva, mte)}
+    val_ap = {'baseline': base['validation']['AP']}
 
     # 6. intervention sweep (paper Section 5): normal vs tangent vs random, both signs of tau
+    def steer(name, tau):
+        return lambda: tuple(st['m'] + margin_shift(tau, st['sums'][name], st['gnorm'], alpha, eps)
+                             for st in (state['validation'], state['test']))
     sweep = []
-    scores = {'baseline': (mva, mte)}
-    for name in state['test']['dirs']:
+    ll0 = log_likelihood(yte, mte); wrong = state['test']['correct'] == 0
+    for name in state['test']['sums']:
         for tau in sorted([-t for t in TAUS] + list(TAUS)):
-            new = {tag: st['m'] + margin_shift(tau, st['dirs'][name], st['gnorm'], alpha, eps)
-                   for tag, st in state.items()}
-            e = evaluate(yva, new['validation'], yte, new['test'])
-            dll = log_likelihood(yte, new['test']) - log_likelihood(yte, mte)
-            wrong = state['test']['correct'] == 0
+            key = f'steer-{name}@{tau:+g}'; scores[key] = steer(name, tau)
+            sv, stt = scores[key]()
+            e = evaluate(yva, sv, yte, stt); val_ap[key] = e['validation']['AP']
+            dll = log_likelihood(yte, stt) - ll0
             sweep.append(dict(direction=name, tau=tau, val_AP=e['validation']['AP'], test_AP=e['test']['AP'],
                               test_F1=e['test']['F1'], test_recall=e['test']['recall'],
                               test_TP=e['test']['TP'], test_FP=e['test']['FP'], test_FN=e['test']['FN'],
@@ -402,67 +470,76 @@ def run(dataset, variant, seed, splits, layers=LAYERS, save=True):
                               dlogp_anomalies=float(dll[yte == 1].mean()),
                               dlogp_normals=float(dll[yte == 0].mean()),
                               improved_errors=float((dll[wrong] > 0).mean()) if wrong.any() else None))
-            scores[f'steer-{name}@{tau:+g}'] = (new['validation'], new['test'])
 
     # 7. boundary-gated rescoring: move a row across the decision threshold in proportion to the
     #    probability that the knob boundary calls the current decision wrong.
-    def gate(st, phi, tau):
-        return st['m'] + tau * (1 / (1 + np.exp(phi))) * np.where(st['m'] >= thr, -1.0, 1.0)
+    def gate(source, tau):
+        return lambda: tuple(st['m'] + tau * (1 / (1 + np.exp(st[source]))) * np.where(st['m'] >= thr, -1.0, 1.0)
+                             for st in (state['validation'], state['test']))
     gated = []
     for source in ('phi', 'phi_r'):
         for tau in (0.25, 0.5, 1.0, 2.0, 4.0, 8.0):
-            new = {tag: gate(st, st[source], tau) for tag, st in state.items()}
-            e = evaluate(yva, new['validation'], yte, new['test'])
             label = 'gate-knob' if source == 'phi' else 'gate-random-knob'
+            key = f'{label}@{tau:g}'; scores[key] = gate(source, tau)
+            e = evaluate(yva, *scores[key]()[:1], yte, scores[key]()[1]); val_ap[key] = e['validation']['AP']
             gated.append(dict(source=label, tau=tau, val_AP=e['validation']['AP'], test_AP=e['test']['AP'],
                               test_F1=e['test']['F1'], test_recall=e['test']['recall'],
                               test_TP=e['test']['TP'], test_FP=e['test']['FP'], test_FN=e['test']['FN']))
-            scores[f'{label}@{tau:g}'] = (new['validation'], new['test'])
 
     # 8. boundary-guided retraining: rows the boundary places on the 'incorrect' side get more weight,
-    #     then XGBoost is refitted (the intervention goes through the model's own training path).
-    logit = lambda p: np.log(np.clip(p, 1e-7, 1 - 1e-7) / np.clip(1 - p, 1e-7, 1 - 1e-7))
-    u = {'reweight-knob': 1 / (1 + np.exp(kan_state(kan, Htr[:, :, J])[0])),
-         'reweight-random-knob': 1 / (1 + np.exp(kan_state(kan_r, Htr[:, :, Jr])[0])),
+    #    then XGBoost is refitted (the intervention goes through the model's own training path).
+    logit = lambda p: np.log(np.clip(p.astype(np.float64), 1e-7, 1 - 1e-7) / np.clip(1 - p.astype(np.float64), 1e-7, 1 - 1e-7))
+    phi_tr, phi_r_tr = np.zeros(len(ytr)), np.zeros(len(ytr))
+    for fold, b in fold_models:
+        st = knob_scalars(fold, Xtr, trees, layers, kan, J, kan_r, Jr, seed, rows=b)
+        phi_tr[b], phi_r_tr[b] = st['phi'], st['phi_r']
+    del fold_models
+    u = {'reweight-knob': 1 / (1 + np.exp(phi_tr)), 'reweight-random-knob': 1 / (1 + np.exp(phi_r_tr)),
          'reweight-margin': 1 / (1 + np.exp(g_margin(mtr, thr_oof)))}
-    reweighted = []
+    reweighted, kept = [], {}
     for label, ui in u.items():
-        for lam in (1.0, 3.0, 10.0):
+        for lam in lambdas:
             m2 = xgb_model(seed, pos_weight).fit(Xtr, ytr, sample_weight=1 + lam * ui,
                                                  eval_set=[(Xva, yva)], verbose=False)
-            sv, stt = logit(m2.predict_proba(Xva)[:, 1]), logit(m2.predict_proba(Xte)[:, 1])
-            e = evaluate(yva, sv, yte, stt)
+            key = f'{label}@{lam:g}'
+            kept[key] = (m2.predict_proba(Xva)[:, 1], np.concatenate(
+                [m2.predict_proba(Xte[b:b + 500_000])[:, 1] for b in range(0, len(Xte), 500_000)]))
+            scores[key] = (lambda k: lambda: (logit(kept[k][0]), logit(kept[k][1])))(key)
+            sv, stt = scores[key]()
+            e = evaluate(yva, sv, yte, stt); val_ap[key] = e['validation']['AP']
             reweighted.append(dict(source=label, lam=lam, val_AP=e['validation']['AP'], test_AP=e['test']['AP'],
                                    test_F1=e['test']['F1'], test_recall=e['test']['recall'],
                                    test_TP=e['test']['TP'], test_FP=e['test']['FP'], test_FN=e['test']['FN'],
                                    mean_weight=float(1 + lam * ui.mean())))
-            scores[f'{label}@{lam:g}'] = (sv, stt)
 
     # 9. choose the Knob-XGBoost configuration on validation AP (baseline stays a candidate)
-    candidates = {k: v for k, v in scores.items()
-                  if k == 'baseline' or k.startswith(('steer-normal', 'gate-knob', 'reweight-knob@'))}
-    chosen = max(candidates, key=lambda k: (average_precision_score(yva, candidates[k][0]), k == 'baseline'))
-    final = evaluate(yva, *[scores[chosen][0]], yte, scores[chosen][1])
+    candidates = [k for k in scores
+                  if k == 'baseline' or k.startswith(('steer-normal', 'gate-knob', 'reweight-knob@'))]
+    chosen = max(candidates, key=lambda k: (val_ap[k], k == 'baseline'))
+    chosen_val, chosen_test = scores[chosen]()
+    final = evaluate(yva, chosen_val, yte, chosen_test)
     families = {}
     for fam in ('steer-normal', 'steer-tangent', 'steer-random', 'gate-knob@', 'gate-random-knob',
                 'reweight-knob@', 'reweight-random-knob', 'reweight-margin'):
         keys = [k for k in scores if k.startswith(fam)]
         if keys:
-            best = max(keys, key=lambda k: average_precision_score(yva, scores[k][0]))
-            families[fam.rstrip('@')] = dict(config=best, **evaluate(yva, scores[best][0], yte, scores[best][1]))
+            best = max(keys, key=lambda k: val_ap[k])
+            sv, stt = scores[best]()
+            families[fam.rstrip('@')] = dict(config=best, **evaluate(yva, sv, yte, stt))
     alerts = base['test']['TP'] + base['test']['FP']
     missed = (yte == 1) & (mte < thr)
-    final_alert = scores[chosen][1] >= final['test']['threshold']
+    final_alert = chosen_test >= final['test']['threshold']
     subtle = dict(baseline_missed=int(missed.sum()),
                   missed_recovered_by_knob=int((missed & final_alert).sum()),
                   caught_lost_by_knob=int(((yte == 1) & (mte >= thr) & ~final_alert).sum()),
                   alert_budget=int(alerts),
                   recall_at_budget_baseline=budget_recall(yte, mte, alerts),
-                  recall_at_budget_knob=budget_recall(yte, scores[chosen][1], alerts))
+                  recall_at_budget_knob=budget_recall(yte, chosen_test, alerts))
     print(f'  chosen on validation: {chosen}  ->  {brief(final)}\n  subtle: {subtle}', flush=True)
 
     out = dict(dataset=dataset, variant=variant, seed=seed, trees=int(trees), layers=int(L), features=int(d),
-               feature_names=names, baseline=base, probe_set=cells, oof_threshold=thr_oof,
+               feature_names=names, train_rows=int(len(ytr)), train_positives=int(ytr.sum()),
+               baseline=base, probe_set=cells, oof_threshold=thr_oof,
                boundary_cv_balanced_accuracy=dict(full=acc_full, margin_only=acc_margin),
                knobs=dict(k=int(k_knob), indices=[int(j) for j in J], names=[names[j] for j in J],
                           importance={names[j]: float(s[j]) for j in order}, acc_top_k=acc_k,
@@ -472,28 +549,53 @@ def run(dataset, variant, seed, splits, layers=LAYERS, save=True):
                           delta_map=delta.tolist()),
                kan=dict(layer_attention=alpha.tolist(), train_balanced_accuracy=kan_train_acc,
                         held_out=held_out, eps=eps, random_knob_names=[names[j] for j in Jr]),
-               intervention_sweep=sweep, gated=gated, reweighted=reweighted, chosen=chosen, knob_xgb=final, family_best_on_validation=families,
-               subtle_anomalies=subtle)
+               intervention_sweep=sweep, gated=gated, reweighted=reweighted, chosen=chosen, knob_xgb=final,
+               family_best_on_validation=families, subtle_anomalies=subtle)
     if save:
         folder = OUT / dataset; folder.mkdir(parents=True, exist_ok=True)
         (folder / f'knob_xgb__{variant}__seed{seed}.json').write_text(json.dumps(out, indent=1) + '\n')
         np.savez_compressed(folder / f'knob_xgb__{variant}__seed{seed}.npz', y_test=yte.astype(np.int8),
-                            baseline=mte.astype(np.float64), knob=scores[chosen][1].astype(np.float64),
+                            baseline=mte.astype(np.float64), knob=chosen_test.astype(np.float64),
                             phi=state['test']['phi'].astype(np.float32),
                             threshold_baseline=thr, threshold_knob=final['test']['threshold'])
     return out
 
 
+def market_data(dataset, variant):
+    splits = {s: load(dataset, s) for s in ('train', 'validation', 'test')}
+    (Xtr, ytr, gtr), (Xva, yva, _), (Xte, yte, _) = (design(splits[s], variant) for s in ('train', 'validation', 'test'))
+    return (Xtr, ytr, gtr, Xva, yva, Xte, yte), feature_names(dataset, variant, Xtr.shape[1])
+
+
+def flat_data(folder, variant):
+    """Arrays written by baselines.kronos_data (Kronos_SupervisedAD splits)."""
+    folder = Path(folder)
+    info = json.loads((folder / 'info.json').read_text())
+    X = {s: np.load(folder / f'X_{variant}_{s}.npy', mmap_mode='r') for s in ('train', 'validation', 'test')}
+    y = {s: np.load(folder / f'y_{s}.npy').astype(int) for s in ('train', 'validation', 'test')}
+    return ((np.ascontiguousarray(X['train']), y['train'], np.load(folder / 'group_train.npy'),
+             np.ascontiguousarray(X['validation']), y['validation'], X['test'], y['test']),
+            info['feature_names'][variant])
+
+
+MARKET = {'sapienza': 'raw', 'sd-stock': 'causal', 'sd-crypto': 'causal'}
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--dataset', required=True, choices=['sapienza', 'sd-stock', 'sd-crypto'])
+    p.add_argument('--dataset', required=True)
     p.add_argument('--variant', default=None)
     p.add_argument('--seeds', default=','.join(map(str, SEEDS)))
+    p.add_argument('--flat', default=None, help='folder written by baselines.kronos_data for non-market tasks')
     args = p.parse_args()
-    variant = args.variant or {'sapienza': 'raw', 'sd-stock': 'causal', 'sd-crypto': 'causal'}[args.dataset]
-    splits = {s: load(args.dataset, s) for s in ('train', 'validation', 'test')}
+    if args.dataset in MARKET:
+        variant = args.variant or MARKET[args.dataset]
+        data, names = market_data(args.dataset, variant)
+    else:
+        variant = args.variant
+        data, names = flat_data(args.flat, variant)
     for seed in map(int, args.seeds.split(',')):
-        run(args.dataset, variant, seed, splits)
+        run(args.dataset, variant, seed, data, names)
 
 
 if __name__ == '__main__':

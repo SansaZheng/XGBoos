@@ -8,6 +8,8 @@
  "feature_names": [
   "x0"
  ],
+ "train_rows": 2560,
+ "train_positives": 333,
  "baseline": {
   "validation": {
    "n": 800,
@@ -152,7 +154,7 @@
    "test_FP": 38,
    "test_FN": 49,
    "dlogp_errors": 0.023014884150107395,
-   "dlogp_anomalies": -0.017587065103449904,
+   "dlogp_anomalies": -0.01758706510344988,
    "dlogp_normals": 0.005032619513430383,
    "improved_errors": 0.6447368421052632
   },
@@ -167,7 +169,7 @@
    "test_FP": 32,
    "test_FN": 39,
    "dlogp_errors": 0.01208610917902773,
-   "dlogp_anomalies": -0.00857335943843023,
+   "dlogp_anomalies": -0.008573359438430227,
    "dlogp_normals": 0.0026185308290118687,
    "improved_errors": 0.6447368421052632
   },
@@ -303,7 +305,7 @@
    "test_FN": 41,
    "dlogp_errors": -0.013294058239551104,
    "dlogp_anomalies": 0.008123830359151702,
-   "dlogp_normals": -0.0028298903042571276,
+   "dlogp_normals": -0.002829890304257128,
    "improved_errors": 0.35526315789473684
   },
   {
@@ -332,8 +334,8 @@
    "test_FP": 55,
    "test_FN": 36,
    "dlogp_errors": -0.00997915745098907,
-   "dlogp_anomalies": 0.0020281345954077075,
-   "dlogp_normals": -0.0005582662071208969,
+   "dlogp_anomalies": 0.002028134595407701,
+   "dlogp_normals": -0.0005582662071208972,
    "improved_errors": 0.5
   },
   {
@@ -497,8 +499,8 @@
    "test_FP": 16,
    "test_FN": 53,
    "dlogp_errors": 0.0051561150917505795,
-   "dlogp_anomalies": -0.0038252319527400914,
-   "dlogp_normals": -0.00028623292464219254,
+   "dlogp_anomalies": -0.0038252319527400935,
+   "dlogp_normals": -0.0002862329246421928,
    "improved_errors": 0.5
   }
  ],
@@ -761,7 +763,7 @@
    "FP": 22,
    "FN": 25,
    "TN": 717,
-   "threshold": -0.6165499687194824
+   "threshold": -0.6165499989321239
   },
   "test": {
    "n": 960,
@@ -776,7 +778,7 @@
    "FP": 28,
    "FN": 45,
    "TN": 833,
-   "threshold": -0.6165499687194824
+   "threshold": -0.6165499989321239
   }
  },
  "family_best_on_validation": {
@@ -927,7 +929,7 @@
     "FP": 22,
     "FN": 25,
     "TN": 717,
-    "threshold": -0.6165499687194824
+    "threshold": -0.6165499989321239
    },
    "test": {
     "n": 960,
@@ -942,7 +944,7 @@
     "FP": 28,
     "FN": 45,
     "TN": 833,
-    "threshold": -0.6165499687194824
+    "threshold": -0.6165499989321239
    }
   },
   "reweight-random-knob": {
@@ -960,7 +962,7 @@
     "FP": 22,
     "FN": 25,
     "TN": 717,
-    "threshold": -0.6165499687194824
+    "threshold": -0.6165499989321239
    },
    "test": {
     "n": 960,
@@ -975,7 +977,7 @@
     "FP": 28,
     "FN": 45,
     "TN": 833,
-    "threshold": -0.6165499687194824
+    "threshold": -0.6165499989321239
    }
   },
   "reweight-margin": {
@@ -993,7 +995,7 @@
     "FP": 30,
     "FN": 25,
     "TN": 709,
-    "threshold": -0.6975547075271606
+    "threshold": -0.6975546996214206
    },
    "test": {
     "n": 960,
@@ -1008,7 +1010,7 @@
     "FP": 49,
     "FN": 48,
     "TN": 812,
-    "threshold": -0.6975547075271606
+    "threshold": -0.6975546996214206
    }
   }
  },

@@ -85,38 +85,41 @@ def main():
     rows['dataset'] = rows.dataset + ' (' + rows.variant + ')'
     for t in (sweep, probe): t['dataset'] = t.dataset + ' (' + t.variant + ')'
     datasets = list(rows.dataset.unique())
-    fig, axes = plt.subplots(2, len(datasets), figsize=(5 * len(datasets), 7.5), squeeze=False)
     colours = {'normal': '#c0392b', 'tangent': '#2c7fb8', 'random': '#7f7f7f'}
-    for j, ds in enumerate(datasets):
-        for i, (col, label) in enumerate((('d_test_AP', 'change in test AP'),
-                                          ('dlogp_errors', 'change in log p(true label), baseline errors'))):
-            ax = axes[i, j]
+    ncols = min(5, len(datasets)); nrows = -(-len(datasets) // ncols)
+    for col, label, stem in (('d_test_AP', 'change in test AP', 'steering_dose_response_AP'),
+                             ('dlogp_errors', 'change in log p(true label) on baseline errors', 'steering_dose_response_logp')):
+        fig, axes = plt.subplots(nrows, ncols, figsize=(4.4 * ncols, 3.5 * nrows), squeeze=False)
+        for ax in axes.ravel()[len(datasets):]: ax.axis('off')
+        for j, ds in enumerate(datasets):
+            ax = axes.ravel()[j]
             for name, colour in colours.items():
                 part = sweep[(sweep.dataset == ds) & (sweep.direction == name)]
                 if part.empty: continue
                 g = part.groupby('tau')[col].agg(['mean', 'std']).reset_index()
                 x = np.arange(len(g))
-                ax.errorbar(x, g['mean'], yerr=g['std'].fillna(0), marker='o', ms=4, lw=1.5, capsize=2,
+                ax.errorbar(x, g['mean'], yerr=g['std'].fillna(0), marker='o', ms=3, lw=1.3, capsize=2,
                             color=colour, label=name)
-                ax.set_xticks(x); ax.set_xticklabels([f'{t:+g}' for t in g.tau], rotation=60, fontsize=8)
-            ax.axhline(0, color='k', lw=0.6)
-            ax.set_title(f'{ds}: {label}', fontsize=10); ax.set_xlabel('step size tau (+ = towards the "correct" side)')
-            if i == 0 and j == 0: ax.legend(title='direction')
-    fig.suptitle('Knob steering in XGBoost: normal direction vs tangent and random controls (mean and sd over 3 seeds)')
-    fig.tight_layout(); fig.savefig(OUT / 'steering_dose_response.png', dpi=140); plt.close(fig)
+                ax.set_xticks(x); ax.set_xticklabels([f'{t:+g}' for t in g.tau], rotation=70, fontsize=7)
+            ax.axhline(0, color='k', lw=0.6); ax.set_title(ds, fontsize=10)
+            if j == 0: ax.legend(title='direction', fontsize=8)
+        fig.suptitle(f'Knob steering in XGBoost, {label}: normal direction vs tangent and random controls\n'
+                     '(x: step size tau, + = towards the "correct" side; mean and sd over seeds)', fontsize=11)
+        fig.tight_layout(); fig.savefig(OUT / f'{stem}.png', dpi=130); plt.close(fig)
 
-    fig, axes = plt.subplots(1, len(datasets), figsize=(5 * len(datasets), 3.8), squeeze=False)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.4 * ncols, 3.6 * nrows), squeeze=False)
+    for ax in axes.ravel()[len(datasets):]: ax.axis('off')
     for j, ds in enumerate(datasets):
         part = probe[probe.dataset == ds]
         cols = ['acc_full_cnn', 'acc_full_mlp', 'acc_full_lr', 'acc_knob', 'acc_random_mean', 'acc_margin_only']
         labels = ['full H\nCNN', 'full H\nMLP', 'full H\nLR', 'top-k\nknobs', 'random-k\ndims', 'margin\nonly']
-        ax = axes[0, j]
+        ax = axes.ravel()[j]
         ax.bar(labels, part[cols].mean(), yerr=part[cols].std().fillna(0), capsize=3,
                color=['#4c72b0'] * 3 + ['#c0392b', '#7f7f7f', '#55a868'])
         ax.axhline(0.5, color='k', lw=0.6, ls='--'); ax.set_ylim(0.4, 1.0)
-        ax.set_title(f'{ds}: correct-vs-incorrect boundary\n(grouped-CV balanced accuracy)', fontsize=10)
-        ax.tick_params(axis='x', labelsize=8)
-    fig.tight_layout(); fig.savefig(OUT / 'boundary_accuracy.png', dpi=140); plt.close(fig)
+        ax.set_title(ds, fontsize=10); ax.tick_params(axis='x', labelsize=7)
+    fig.suptitle('Correct-vs-incorrect boundary: grouped-CV balanced accuracy (chance 0.5)', fontsize=11)
+    fig.tight_layout(); fig.savefig(OUT / 'boundary_accuracy.png', dpi=130); plt.close(fig)
 
 
 if __name__ == '__main__':
