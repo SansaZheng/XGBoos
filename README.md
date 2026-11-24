@@ -2,11 +2,14 @@
 
 把 Huang、Mao、Jiang、Cambria《Uncovering the Knowledge Boundaries and Mechanistic "Knob" of LLMs》的知识边界 / 旋钮方法迁移到 XGBoost,在 [Kronos_SupervisedAD](https://github.com/SansaZheng/Kronos_SupervisedAD) 的九项公开任务上、用与它相同的划分检验。
 
-**最新报告:[中文 v2](reports/KNOB_XGB_REPORT_CN_v2.md) · [English v2](reports/KNOB_XGB_REPORT_EN_v2.md)**(上一版:[中文 v1](reports/KNOB_XGB_REPORT_CN_v1.md) · [English v1](reports/KNOB_XGB_REPORT_EN_v1.md))
+**最新报告:[中文 v3](reports/KNOB_XGB_REPORT_CN_v3.md) · [English v3](reports/KNOB_XGB_REPORT_EN_v3.md)** —— 哪些 XGBoost 参数控制异常 / 正常的区别,以及调节它们的效果。
+
+此前版本:[中文 v2](reports/KNOB_XGB_REPORT_CN_v2.md) · [English v2](reports/KNOB_XGB_REPORT_EN_v2.md)(九项任务、与 Kronos 比较);[中文 v1](reports/KNOB_XGB_REPORT_CN_v1.md) · [English v1](reports/KNOB_XGB_REPORT_EN_v1.md)(三项行情任务)
 
 - XGBoost 在九项中的六项明显高于已记录的 Kronos-mini,ULB 持平,SD-FMM 股票和 TabFormer 低于它。
 - Knob 没有带来可靠的检测提升:测试 AP 变化在 −0.004 到 +0.015 之间,有提升处普通的不确定性加权重训同样有效。
 - 在特征较多的交易表数据上旋钮确实存在且特异,但不改变排序。
+- v3:模型内部控制异常 / 正常区别的旋钮通常只是一个特征,调它的增益没有用;真正起作用的是超参数 `scale_pos_weight`,调后 PaySim 的 AP 从 0.924 升到 0.967,SD-FMM 股票从 0.602 升到 0.651(调 `reg_lambda`)。
 
 测试 AP(Kronos 为该仓库记录,未重跑):
 
@@ -26,6 +29,7 @@
 
 - `baselines/knob_xgb.py`:方法实现与实验;`baselines/knob_aggregate.py`:汇总、作图、复核
 - `baselines/kronos_data.py`:调用 Kronos_SupervisedAD 的数据准备代码生成相同划分的输入;`baselines/kronos_compare.py`:XGBoost 各特征版本与该仓库的梯度提升对照;`baselines/kronos_table.py`:总对比表
+- `baselines/knob_params.py`:异常 / 正常边界上的模型内部旋钮与超参数旋钮;`baselines/knob_params_aggregate.py`:汇总与作图;结果在 `results/knob_params/`
 - `baselines/market.py`、`baselines/common.py`:三项行情任务的数据读取与指标,来自 [Knob](https://github.com/SansaZheng/Knob)
 - `data/`:三项行情任务的原始数据与划分清单;其余六项数据在 Kronos_SupervisedAD 仓库,不在此重复存放
 - `results/knob/`:逐次运行记录、测试分数、汇总表与图;`results/kronos_compare/`:对照结果与总对比表;`results/kronos_reference/`:从 Kronos_SupervisedAD 提交 `1f3f0aa` 复制的 Kronos 记录
