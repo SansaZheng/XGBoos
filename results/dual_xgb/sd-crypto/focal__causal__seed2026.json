@@ -1,0 +1,122 @@
+{
+ "dataset": "sd-crypto",
+ "variant": "causal",
+ "seed": 2026,
+ "results": {
+  "focal g=0": {
+   "val_AP": 0.7995721361979673,
+   "test_AP": 0.658687195064479,
+   "test_ROC_AUC": 0.9797168451176254,
+   "test_F1": 0.5964912280701754,
+   "test_precision": 0.7391304347826086,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 12,
+   "test_FN": 34,
+   "trees": [
+    55
+   ]
+  },
+  "focal g=0.5": {
+   "val_AP": 0.7925557325530755,
+   "test_AP": 0.6527917675393855,
+   "test_ROC_AUC": 0.9793754488476855,
+   "test_F1": 0.6101694915254237,
+   "test_precision": 0.72,
+   "test_recall": 0.5294117647058824,
+   "test_TP": 36,
+   "test_FP": 14,
+   "test_FN": 32,
+   "trees": [
+    60
+   ]
+  },
+  "focal g=1": {
+   "val_AP": 0.7957250192890308,
+   "test_AP": 0.6566989299440464,
+   "test_ROC_AUC": 0.9788837566103022,
+   "test_F1": 0.6201550387596899,
+   "test_precision": 0.6557377049180327,
+   "test_recall": 0.5882352941176471,
+   "test_TP": 40,
+   "test_FP": 21,
+   "test_FN": 28,
+   "trees": [
+    52
+   ]
+  },
+  "focal g=2": {
+   "val_AP": 0.793534634766328,
+   "test_AP": 0.6562370727650857,
+   "test_ROC_AUC": 0.9797052838893603,
+   "test_F1": 0.6238532110091743,
+   "test_precision": 0.8292682926829268,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 7,
+   "test_FN": 34,
+   "trees": [
+    46
+   ]
+  },
+  "focal g=3": {
+   "val_AP": 0.7975618953117455,
+   "test_AP": 0.6534166938702168,
+   "test_ROC_AUC": 0.9793706883419294,
+   "test_F1": 0.6296296296296295,
+   "test_precision": 0.85,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 6,
+   "test_FN": 34,
+   "trees": [
+    52
+   ]
+  },
+  "focal-ens": {
+   "val_AP": 0.8011342829401572,
+   "test_AP": 0.6599249313936825,
+   "test_ROC_AUC": 0.9794856205523275,
+   "test_F1": 0.616822429906542,
+   "test_precision": 0.8461538461538461,
+   "test_recall": 0.4852941176470588,
+   "test_TP": 33,
+   "test_FP": 6,
+   "test_FN": 35,
+   "trees": [
+    41,
+    35,
+    39,
+    24,
+    8
+   ]
+  },
+  "focal-ens+N": {
+   "val_AP": 0.8137774884723653,
+   "test_AP": 0.6757983328488769,
+   "test_ROC_AUC": 0.9793842897869469,
+   "test_F1": 0.6296296296296295,
+   "test_precision": 0.85,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 6,
+   "test_FN": 34,
+   "trees": [
+    23,
+    48,
+    30,
+    38,
+    30
+   ]
+  }
+ },
+ "seconds": {
+  "focal g=0": 0.6,
+  "focal g=0.5": 0.7,
+  "focal g=1": 0.7,
+  "focal g=2": 0.7,
+  "focal g=3": 0.6,
+  "focal-ens": 25.7,
+  "focal-ens+N": 179.1
+ }
+}

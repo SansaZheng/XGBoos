@@ -1,0 +1,122 @@
+{
+ "dataset": "sd-stock",
+ "variant": "raw",
+ "seed": 13,
+ "results": {
+  "focal g=0": {
+   "val_AP": 0.58126755322087,
+   "test_AP": 0.6052177788734925,
+   "test_ROC_AUC": 0.890548927134293,
+   "test_F1": 0.5638297872340425,
+   "test_precision": 0.5955056179775281,
+   "test_recall": 0.5353535353535354,
+   "test_TP": 53,
+   "test_FP": 36,
+   "test_FN": 46,
+   "trees": [
+    5
+   ]
+  },
+  "focal g=0.5": {
+   "val_AP": 0.5765840068291106,
+   "test_AP": 0.5988875200878075,
+   "test_ROC_AUC": 0.8914581353605744,
+   "test_F1": 0.6108374384236452,
+   "test_precision": 0.5961538461538461,
+   "test_recall": 0.6262626262626263,
+   "test_TP": 62,
+   "test_FP": 42,
+   "test_FN": 37,
+   "trees": [
+    5
+   ]
+  },
+  "focal g=1": {
+   "val_AP": 0.5652985768490886,
+   "test_AP": 0.5925031592708759,
+   "test_ROC_AUC": 0.8879679489435588,
+   "test_F1": 0.5654450261780105,
+   "test_precision": 0.5869565217391305,
+   "test_recall": 0.5454545454545454,
+   "test_TP": 54,
+   "test_FP": 38,
+   "test_FN": 45,
+   "trees": [
+    5
+   ]
+  },
+  "focal g=2": {
+   "val_AP": 0.5650303891932753,
+   "test_AP": 0.5917982034313239,
+   "test_ROC_AUC": 0.887615997372095,
+   "test_F1": 0.5604395604395604,
+   "test_precision": 0.6144578313253012,
+   "test_recall": 0.5151515151515151,
+   "test_TP": 51,
+   "test_FP": 32,
+   "test_FN": 48,
+   "trees": [
+    5
+   ]
+  },
+  "focal g=3": {
+   "val_AP": 0.5601966156789562,
+   "test_AP": 0.5923864588267428,
+   "test_ROC_AUC": 0.8908363542509885,
+   "test_F1": 0.5654450261780105,
+   "test_precision": 0.5869565217391305,
+   "test_recall": 0.5454545454545454,
+   "test_TP": 54,
+   "test_FP": 38,
+   "test_FN": 45,
+   "trees": [
+    5
+   ]
+  },
+  "focal-ens": {
+   "val_AP": 0.568405731731884,
+   "test_AP": 0.6002342763513332,
+   "test_ROC_AUC": 0.8845716162789334,
+   "test_F1": 0.5777777777777777,
+   "test_precision": 0.6419753086419753,
+   "test_recall": 0.5252525252525253,
+   "test_TP": 52,
+   "test_FP": 29,
+   "test_FN": 47,
+   "trees": [
+    9,
+    4,
+    2,
+    5,
+    10
+   ]
+  },
+  "focal-ens+N": {
+   "val_AP": 0.45271556085154857,
+   "test_AP": 0.4898004929649679,
+   "test_ROC_AUC": 0.7479792113938455,
+   "test_F1": 0.5421686746987951,
+   "test_precision": 0.6716417910447762,
+   "test_recall": 0.45454545454545453,
+   "test_TP": 45,
+   "test_FP": 22,
+   "test_FN": 54,
+   "trees": [
+    1,
+    51,
+    71,
+    1,
+    58
+   ]
+  }
+ },
+ "seconds": {
+  "focal g=0": 0.1,
+  "focal g=0.5": 11.1,
+  "focal g=1": 16.3,
+  "focal g=2": 16.6,
+  "focal g=3": 17.5,
+  "focal-ens": 63.7,
+  "focal-ens+N": 1.0
+ }
+}

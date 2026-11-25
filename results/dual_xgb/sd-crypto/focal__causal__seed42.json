@@ -1,0 +1,122 @@
+{
+ "dataset": "sd-crypto",
+ "variant": "causal",
+ "seed": 42,
+ "results": {
+  "focal g=0": {
+   "val_AP": 0.8062702830495836,
+   "test_AP": 0.6522274085154263,
+   "test_ROC_AUC": 0.9802445811843051,
+   "test_F1": 0.6296296296296295,
+   "test_precision": 0.85,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 6,
+   "test_FN": 34,
+   "trees": [
+    17
+   ]
+  },
+  "focal g=0.5": {
+   "val_AP": 0.7996142799575698,
+   "test_AP": 0.6601916855032818,
+   "test_ROC_AUC": 0.979943309177167,
+   "test_F1": 0.6296296296296295,
+   "test_precision": 0.85,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 6,
+   "test_FN": 34,
+   "trees": [
+    17
+   ]
+  },
+  "focal g=1": {
+   "val_AP": 0.7959169155292934,
+   "test_AP": 0.65596650993129,
+   "test_ROC_AUC": 0.9800045156797459,
+   "test_F1": 0.5932203389830508,
+   "test_precision": 0.7,
+   "test_recall": 0.5147058823529411,
+   "test_TP": 35,
+   "test_FP": 15,
+   "test_FN": 33,
+   "trees": [
+    17
+   ]
+  },
+  "focal g=2": {
+   "val_AP": 0.8005190821935448,
+   "test_AP": 0.6589920386773517,
+   "test_ROC_AUC": 0.9801153674566386,
+   "test_F1": 0.6296296296296295,
+   "test_precision": 0.85,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 6,
+   "test_FN": 34,
+   "trees": [
+    17
+   ]
+  },
+  "focal g=3": {
+   "val_AP": 0.8043623850344281,
+   "test_AP": 0.6609977496662702,
+   "test_ROC_AUC": 0.9804363615590521,
+   "test_F1": 0.6296296296296295,
+   "test_precision": 0.85,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 6,
+   "test_FN": 34,
+   "trees": [
+    17
+   ]
+  },
+  "focal-ens": {
+   "val_AP": 0.8070183189570946,
+   "test_AP": 0.6563020488537742,
+   "test_ROC_AUC": 0.9799895540902266,
+   "test_F1": 0.6238532110091743,
+   "test_precision": 0.8292682926829268,
+   "test_recall": 0.5,
+   "test_TP": 34,
+   "test_FP": 7,
+   "test_FN": 34,
+   "trees": [
+    18,
+    28,
+    19,
+    26,
+    5
+   ]
+  },
+  "focal-ens+N": {
+   "val_AP": 0.7938433678107958,
+   "test_AP": 0.6683868779200409,
+   "test_ROC_AUC": 0.9792054307849667,
+   "test_F1": 0.5714285714285714,
+   "test_precision": 0.5316455696202531,
+   "test_recall": 0.6176470588235294,
+   "test_TP": 42,
+   "test_FP": 37,
+   "test_FN": 26,
+   "trees": [
+    23,
+    33,
+    10,
+    61,
+    36
+   ]
+  }
+ },
+ "seconds": {
+  "focal g=0": 20.9,
+  "focal g=0.5": 5.5,
+  "focal g=1": 0.4,
+  "focal g=2": 0.5,
+  "focal g=3": 20.8,
+  "focal-ens": 72.1,
+  "focal-ens+N": 73.4
+ }
+}
