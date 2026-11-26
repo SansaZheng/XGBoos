@@ -1,0 +1,21 @@
+{
+ "dataset": "ulb",
+ "chosen": {
+  "start": "prior",
+  "reg": "default",
+  "novelty": false,
+  "ensemble": true
+ },
+ "variant": "raw",
+ "seed": 42,
+ "test_positives": 52,
+ "ours_AP": 0.7614176709145347,
+ "hgb_AP": 0.7759739532689929,
+ "diff": -0.014556282354458161,
+ "ci95": [
+  -0.03286439203862654,
+  -0.00026758283347458735
+ ],
+ "share_resamples_ours_higher": 0.024,
+ "resamples": 500
+}

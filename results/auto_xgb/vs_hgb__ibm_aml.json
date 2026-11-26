@@ -1,0 +1,21 @@
+{
+ "dataset": "ibm_aml",
+ "chosen": {
+  "start": "half",
+  "reg": "default",
+  "novelty": false,
+  "ensemble": false
+ },
+ "variant": "temporal",
+ "seed": 42,
+ "test_positives": 1567,
+ "ours_AP": 0.5323997572252939,
+ "hgb_AP": 0.23033711337153498,
+ "diff": 0.3020626438537589,
+ "ci95": [
+  0.2812109360341771,
+  0.321463417788741
+ ],
+ "share_resamples_ours_higher": 1.0,
+ "resamples": 500
+}

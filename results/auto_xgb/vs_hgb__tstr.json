@@ -1,0 +1,21 @@
+{
+ "dataset": "tstr",
+ "chosen": {
+  "start": "prior",
+  "reg": "default",
+  "novelty": false,
+  "ensemble": false
+ },
+ "variant": "summary",
+ "seed": 42,
+ "test_positives": 94,
+ "ours_AP": 0.840288999204438,
+ "hgb_AP": 0.8260721803725893,
+ "diff": 0.014216818831848665,
+ "ci95": [
+  -0.01680229263430445,
+  0.04759091707533549
+ ],
+ "share_resamples_ours_higher": 0.784,
+ "resamples": 500
+}

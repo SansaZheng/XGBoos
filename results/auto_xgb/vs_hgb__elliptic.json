@@ -1,0 +1,21 @@
+{
+ "dataset": "elliptic",
+ "chosen": {
+  "start": "half",
+  "reg": "depth4",
+  "novelty": false,
+  "ensemble": true
+ },
+ "variant": "raw",
+ "seed": 42,
+ "test_positives": 408,
+ "ours_AP": 0.5443878993674677,
+ "hgb_AP": 0.5414920433491461,
+ "diff": 0.002895856018321541,
+ "ci95": [
+  -0.002226797360080598,
+  0.008414017356265303
+ ],
+ "share_resamples_ours_higher": 0.86,
+ "resamples": 500
+}

@@ -1,0 +1,21 @@
+{
+ "dataset": "paysim",
+ "chosen": {
+  "start": "half",
+  "reg": "default",
+  "novelty": false,
+  "ensemble": false
+ },
+ "variant": "temporal",
+ "seed": 42,
+ "test_positives": 4010,
+ "ours_AP": 0.9680940730606556,
+ "hgb_AP": 0.9756149550456247,
+ "diff": -0.00752088198496903,
+ "ci95": [
+  -0.010086664423672915,
+  -0.004960558836090895
+ ],
+ "share_resamples_ours_higher": 0.0,
+ "resamples": 500
+}
