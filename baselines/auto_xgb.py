@@ -35,7 +35,9 @@ def main():
     p.add_argument('--dataset', required=True)
     p.add_argument('--variant', default=None)
     p.add_argument('--flat', default=None)
+    p.add_argument('--out', default=None, help='results subfolder (default auto_xgb)')
     args = p.parse_args()
+    out_dir = RESULTS / args.out if args.out else OUT
     if args.dataset in K.MARKET and not args.flat:
         variant = args.variant or K.MARKET[args.dataset]
         data, names = K.market_data(args.dataset, variant)
@@ -123,8 +125,8 @@ def main():
     out = dict(dataset=args.dataset, variant=variant, chosen=dict(start=best[0], reg=best[1], novelty=best[2], ensemble=best[3]),
                chosen_val_AP=best_val, variant_trace=locals().get('variant_trace', []), trace=trace, final=final, seconds=round(time.time() - started, 1),
                best_test_candidate=max(trace, key=lambda r: r['test_AP']))
-    OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / f'{args.dataset}__{variant}.json').write_text(json.dumps(out, indent=1) + '\n')
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / f'{args.dataset}__{variant}.json').write_text(json.dumps(out, indent=1) + '\n')
     m = lambda k: float(np.mean([f[k] for f in final]))
     print(f'[{args.dataset}] chosen {out["chosen"]} -> test AP {m("test_AP"):.4f} ± {np.std([f["test_AP"] for f in final], ddof=1):.4f} '
           f'F1 {m("test_F1"):.4f} FN {m("test_FN"):.1f} FP {m("test_FP"):.1f} | best candidate on test '
